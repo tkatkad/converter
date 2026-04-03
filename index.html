@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Markdown → WhatsApp Formatter PRO</title>
+<title>Markdown → WhatsApp Formatter</title>
 
 <style>
 body { font-family:sans-serif; background:#f0f2f5; padding:20px; }
@@ -16,9 +16,9 @@ button { padding:10px; margin-right:5px; cursor:pointer; }
 
 <body>
 <div class="container">
-<h2>📱 Markdown → WhatsApp Formatter (PRO)</h2>
+<h2>📱 Markdown → WhatsApp Formatter</h2>
 
-<textarea id="input" placeholder="Paste Markdown / hasil AI di sini..."></textarea>
+<textarea id="input" placeholder="Paste Markdown dari AI / Notion di sini..."></textarea>
 
 <button onclick="convert()">🔄 Convert</button>
 <button onclick="clearAll()">🗑️ Clear</button>
@@ -33,79 +33,47 @@ const outputEl = document.getElementById('output');
 
 
 // ==============================
-// 🔥 TABLE ENGINE (AI-PROOF)
+// TABLE PARSER (LEAN & AKURAT)
 // ==============================
 function convertTable(md) {
-  const tableRegex = /(\|.*\|\n?)+/g;
+  const tableRegex = /(\|.*\|\n)+/g;
 
-  return md.replace(tableRegex, (block) => {
+  return md.replace(tableRegex, (table) => {
 
-    // STEP 1: Normalisasi
-    let raw = block
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/\r/g, '');
+    let rows = table.trim().split('\n');
 
-    let lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    // hapus separator
+    rows = rows.filter(r => !r.match(/^\|\s*[:\- ]+\|/));
 
-    // STEP 2: Merge broken rows
-    let merged = [];
-    let current = '';
-
-    for (let line of lines) {
-      if (line.startsWith('|')) {
-        if (current) merged.push(current);
-        current = line;
-      } else {
-        current += ' ' + line;
-      }
-    }
-    if (current) merged.push(current);
-
-    // STEP 3: Remove separator
-    merged = merged.filter(r => !r.match(/^\|[\s:\-\|]+\|$/));
-
-    // STEP 4: Parse cells
-    let data = merged.map(r =>
-      r.split('|').slice(1, -1).map(cell =>
-        cell
-          .replace(/\n/g, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
+    // parse cell
+    let data = rows.map(r =>
+      r.split('|').slice(1, -1).map(c =>
+        c.replace(/<br\s*\/?>/gi, '\n').trim()
       )
     );
 
-    if (data.length < 2) return block;
+    if (data.length < 2) return table;
 
-    // STEP 5: Normalize column count
     const colCount = Math.max(...data.map(r => r.length));
+
+    // normalisasi kolom
     data.forEach(r => {
       while (r.length < colCount) r.push('');
     });
 
-    // STEP 6: Handle LIST inside cell
-    data = data.map(row => row.map(cell => {
-      return cell
-        .replace(/\d+\.\s*/g, '\n$&')
-        .replace(/-\s+/g, '\n• ')
-        .replace(/\n{2,}/g, '\n')
-        .trim();
-    }));
-
-    // STEP 7: Column width
+    // hitung lebar kolom (multiline aware)
     const colWidths = Array(colCount).fill(0);
-    data.forEach(r => {
-      r.forEach((c,i)=>{
-        const maxLine = Math.max(...c.split('\n').map(x=>x.length));
-        colWidths[i] = Math.max(colWidths[i], maxLine, 5);
+    data.forEach(row => {
+      row.forEach((cell, i) => {
+        const maxLine = Math.max(...cell.split('\n').map(x => x.length));
+        colWidths[i] = Math.max(colWidths[i], maxLine);
       });
     });
 
-    // STEP 8: Render table
     let out = '```\n';
 
     data.forEach((row, idx) => {
 
-      // multi-line cell support
       const splitCells = row.map(c => c.split('\n'));
       const maxLines = Math.max(...splitCells.map(c => c.length));
 
@@ -117,7 +85,7 @@ function convertTable(md) {
       }
 
       if (idx === 0) {
-        out += colWidths.map(w=>'─'.repeat(w)).join('┼') + '\n';
+        out += colWidths.map(w => '─'.repeat(w)).join('┼') + '\n';
       }
     });
 
@@ -134,10 +102,9 @@ function convertToWhatsApp(md) {
   if (!md.trim()) return '';
 
   let text = md
-    .replace(/\r\n/g, '\n')
-    .replace(/<br\s*\/?>/gi, '\n');
+    .replace(/\r\n/g, '\n');
 
-  // Table dulu
+  // Convert table dulu
   text = convertTable(text);
 
   const lines = text.split('\n');
@@ -145,13 +112,12 @@ function convertToWhatsApp(md) {
   const processed = lines.map(line => {
 
     // Heading
-    line = line.replace(/^#\s+(.*)/, '*📌 $1*');
-    line = line.replace(/^##\s+(.*)/, '*▶ $1*');
     line = line.replace(/^###\s+(.*)/, '*• $1*');
+    line = line.replace(/^##\s+(.*)/, '*▶ $1*');
+    line = line.replace(/^#\s+(.*)/, '*📌 $1*');
 
     // List
     line = line.replace(/^(\*|-)\s+(.*)/, '• $2');
-    line = line.replace(/^•\s*•/, '•');
     line = line.replace(/^(\d+)\.\s+(.*)/, '$1. $2');
 
     // Quote
@@ -166,7 +132,7 @@ function convertToWhatsApp(md) {
   // INLINE FORMATTING (SAFE)
   // ==============================
 
-  // Code first
+  // Code
   result = result.replace(/```([\s\S]*?)```/g, '```$1```');
   result = result.replace(/`(.+?)`/g, '`$1`');
 
@@ -174,21 +140,21 @@ function convertToWhatsApp(md) {
   result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
   result = result.replace(/__(.+?)__/g, '*$1*');
 
-  // Italic safe
+  // Fix italic vs bold conflict
+  result = result.replace(/_(\*.+?\*)_/g, '$1');
+
+  // Italic
   result = result.replace(/(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)/g, '_$1_');
   result = result.replace(/_(.+?)_/g, '_$1_');
 
   // Strike
   result = result.replace(/~~(.+?)~~/g, '~$1~');
 
-  // Links
+  // Link
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
 
-  // Cleanup kacau
-  result = result
-    .replace(/_\*\s*/g, '*')
-    .replace(/\*\*_+/g, '*')
-    .replace(/\n{3,}/g, '\n\n');
+  // Cleanup
+  result = result.replace(/\n{3,}/g, '\n\n');
 
   return result.trim();
 }
@@ -212,7 +178,7 @@ async function copy() {
   alert('Copied!');
 }
 
-// Auto convert
+// Auto convert saat paste
 inputEl.addEventListener('paste', () => {
   setTimeout(() => {
     outputEl.value = convertToWhatsApp(inputEl.value);
