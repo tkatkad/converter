@@ -1,268 +1,199 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Markdown → WhatsApp Formatter</title>
-  <style>
-    :root {
-      --bg: #f0f2f5;
-      --card: #ffffff;
-      --primary: #25d366;
-      --primary-hover: #128c7e;
-      --text: #111b21;
-      --subtext: #54656f;
-      --border: #d1d7db;
-      --output-bg: #e7efe7;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
-    .container { max-width: 800px; margin: 0 auto; background: var(--card); padding: 24px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-    h1 { color: var(--primary); margin-bottom: 6px; }
-    .desc { color: var(--subtext); margin-bottom: 16px; font-size: 14px; }
-    textarea { width: 100%; min-height: 140px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; resize: vertical; margin-bottom: 12px; background: #fafafa; }
-    textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,211,102,0.2); }
-    .controls { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-    button { padding: 10px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px; }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-sec { background: #e9edef; color: var(--text); }
-    .btn-sec:hover { background: #d1d7db; }
-    #output { background: var(--output-bg); font-family: 'Courier New', monospace; white-space: pre-wrap; word-break: break-word; }
-    .info { background: #e7f3ff; border-left: 4px solid #2196f3; padding: 10px; margin-bottom: 16px; font-size: 13px; border-radius: 4px; color: #0c5460; }
-    .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-    .toast.show { opacity: 1; }
-    @media (max-width: 600px) { .container { padding: 16px; } textarea { min-height: 100px; } .controls { flex-direction: column; } button { width: 100%; justify-content: center; } }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown → WhatsApp Formatter</title>
+
+<style>
+:root {
+  --bg: #f0f2f5;
+  --card: #ffffff;
+  --primary: #25d366;
+  --primary-hover: #128c7e;
+  --text: #111b21;
+  --subtext: #54656f;
+  --border: #d1d7db;
+  --output-bg: #e7efe7;
+}
+body { font-family: sans-serif; background: var(--bg); padding:20px; }
+.container { max-width:800px;margin:auto;background:#fff;padding:20px;border-radius:10px; }
+textarea { width:100%;min-height:120px;margin-bottom:10px;padding:10px; }
+button { padding:10px; margin-right:5px; cursor:pointer; }
+#output { background: var(--output-bg); }
+</style>
 </head>
+
 <body>
-  <div class="container">
-    <h1>📱 Markdown → WhatsApp Formatter</h1>
-    <p class="desc">Tempel teks Markdown (dari NotebookLM, AI, Notion, dll) dan ubah ke format resmi WhatsApp secara instan.</p>
-    
-    <div class="info">
-      💡 <b>Catatan:</b> WhatsApp tidak mendukung <code>#</code> heading, tabel, atau hyperlink. Converter ini otomatis mengubah heading menjadi <b>tebal</b>, merapikan spasi daftar, kutipan, kode, dll sesuai standar resmi WhatsApp.
-    </div>
+<div class="container">
+<h2>📱 Markdown → WhatsApp Formatter</h2>
 
-    <textarea id="input" placeholder="Tempel teks Markdown di sini..."></textarea>
-    
-    <div class="controls">
-      <button id="convertBtn" class="btn-primary">🔄 Konversi</button>
-      <button id="clearBtn" class="btn-sec">🗑️ Hapus</button>
-      <button id="copyBtn" class="btn-sec">📋 Salin Hasil</button>
-    </div>
+<textarea id="input" placeholder="Paste Markdown..."></textarea>
 
-    <textarea id="output" readonly placeholder="Hasil format WhatsApp akan muncul di sini..."></textarea>
-    <div class="toast" id="toast">✅ Tersalin ke clipboard!</div>
-  </div>
+<button onclick="convert()">🔄 Convert</button>
+<button onclick="clearAll()">🗑️ Clear</button>
+<button onclick="copy()">📋 Copy</button>
 
-  <script>
-    const inputEl = document.getElementById('input');
-    const outputEl = document.getElementById('output');
-    const convertBtn = document.getElementById('convertBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const copyBtn = document.getElementById('copyBtn');
-    const toast = document.getElementById('toast');
+<textarea id="output" readonly></textarea>
+</div>
+
+<script>
+const inputEl = document.getElementById('input');
+const outputEl = document.getElementById('output');
 
 
-    function convertTableToWhatsApp(markdown) {
-  // Deteksi dan konversi markdown table: | col1 | col2 |
-  const tableRegex = /(\|[^\n]+\|\n)(\|[\s:-]+\|\n)((?:\|[^\n]+\|\n?)+)/g;
-  
-  return markdown.replace(tableRegex, (match) => {
-    const rows = match.trim().split('\n').filter(r => !r.match(/^\|[ :\-\|]+\|$/));
-    
-    // Extract headers & data
-    const data = rows.map(row => 
-      row.split('|').map(cell => cell.trim()).filter(Boolean)
-    );
-    
-    if (data.length < 2) return match; // Not a valid table
-    
-    const [headers, ...body] = data;
-    
-    // Build monospace table
-    let result = '```\n';
-    
-    // Header row
-    result += headers.join(' │ ') + '\n';
-    result += '─'.repeat(headers.join(' │ ').length) + '\n';
-    
-    // Body rows
-    body.forEach(row => {
-      // Pad cells to align with headers
-      const padded = row.map((cell, i) => 
-        cell.padEnd(headers[i]?.length || cell.length)
-      );
-      result += padded.join(' │ ') + '\n';
-    });
-    
-    result += '```';
-    return result;
-  });
-}
-
-
-function convertTableToWhatsAppRobust(markdown) {
-
-  // Regex untuk deteksi markdown table: minimal 2 baris dengan |
+// ==============================
+// TABLE CONVERTER (ROBUST)
+// ==============================
+function convertTable(md) {
   const tableRegex = /^(\|[^\n]+\|\n)(\|[\s:\-]+\|\n)((?:\|[^\n]+\|\n?)+)/gm;
-  
-  return markdown.replace(tableRegex, (fullMatch, headerRow, separatorRow, bodyRows) => {
-    // Parse semua baris
-    const rawRows = [headerRow, ...bodyRows.trim().split('\n')]
-      .map(row => row.trim())
-      .filter(row => row.startsWith('|') && row.endsWith('|'));
-    
-    if (rawRows.length < 2) return fullMatch; // Bukan tabel valid
-    
-    // Extract sel, abaikan separator row (baris dengan :---)
-    const data = rawRows
-      .filter(row => !row.match(/^\|[ :\-\|]+\|$/))
-      .map(row => 
-        row.split('|')
-          .map(cell => cell.trim())
-          .filter((_, i, arr) => i > 0 && i < arr.length) // Hapus | awal/akhir kosong
-      );
-    
-    if (data.length === 0) return fullMatch;
-    
-    const [headers, ...body] = data;
-    
-    // Hitung lebar maksimal per kolom untuk alignment
-    const colWidths = headers.map((_, colIndex) => {
-      const cells = [headers[colIndex], ...body.map(row => row[colIndex] || '')];
-      return Math.max(...cells.map(c => c.length), 5); // Minimal 5 char
+
+  return md.replace(tableRegex, (match) => {
+    const rows = match.trim().split('\n')
+      .filter(r => r.startsWith('|') && r.endsWith('|'))
+      .filter(r => !r.match(/^\|[\s:\-\|]+\|$/));
+
+    const data = rows.map(r =>
+      r.split('|').slice(1, -1).map(c => c.trim())
+    );
+
+    if (data.length < 2) return match;
+
+    // Normalize column count
+    const colCount = Math.max(...data.map(r => r.length));
+    const normalized = data.map(row => {
+      while (row.length < colCount) row.push('');
+      return row;
     });
-    
-    // Build output monospace
-    let output = '```\n';
-    
-    // Header
-    output += headers.map((h, i) => h.padEnd(colWidths[i])).join(' │ ') + '\n';
-    output += colWidths.map(w => '─'.repeat(w)).join('┼') + '\n';
-    
-    // Body
-    body.forEach(row => {
-      const padded = row.map((cell, i) => 
-        (cell || '').padEnd(colWidths[i])
-      );
-      output += padded.join(' │ ') + '\n';
+
+    // Column widths
+    const colWidths = [];
+    for (let i = 0; i < colCount; i++) {
+      colWidths[i] = Math.max(...normalized.map(r => r[i].length), 5);
+    }
+
+    let out = '```\n';
+
+    normalized.forEach((row, idx) => {
+      const line = row.map((c,i)=>c.padEnd(colWidths[i])).join(' │ ');
+      out += line + '\n';
+
+      if (idx === 0) {
+        out += colWidths.map(w=>'─'.repeat(w)).join('┼') + '\n';
+      }
     });
-    
-    output += '```';
-    return output;
+
+    out += '```';
+    return out;
   });
 }
 
 
-    
- 
-function fallbackTableConversion(text) {
-  // Jika masih ada pola tabel markdown yang lolos, konversi ke list
-  return text.replace(/^\|(.+)\|\s*$/gm, (match, content) => {
+// ==============================
+// FALLBACK TABLE
+// ==============================
+function fallbackTable(text) {
+  return text.replace(/^\|(.+)\|\s*$/gm, (m, content) => {
     const cells = content.split('|').map(c => c.trim()).filter(Boolean);
-    if (cells.length <= 1) return match; // Bukan tabel
+    if (cells.length <= 1) return m;
     return '• ' + cells.join(' → ');
   });
 }
 
-    
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2000);
-    }
 
-    function convertToWhatsApp(md) {
-      if (!md.trim()) return '';
-      let text = md.replace(/\r\n/g, '\n');
+// ==============================
+// MAIN CONVERTER
+// ==============================
+function convertToWhatsApp(md) {
+  if (!md.trim()) return '';
+
+  let text = md.replace(/\r\n/g, '\n');
+
+  // Safe preprocessing ONLY for table lines
+  text = text.replace(/^\|.*\|$/gm, line =>
+    line.replace(/\s*\|\s*/g, '|')
+  );
+
+  // Convert table first
+  text = convertTable(text);
+
+  const lines = text.split('\n');
+
+  const processed = lines.map(line => {
+
+    // Heading hierarchy
+    line = line.replace(/^#\s+(.*)/, '*📌 $1*');
+    line = line.replace(/^##\s+(.*)/, '*▶ $1*');
+    line = line.replace(/^###\s+(.*)/, '*• $1*');
+
+    // Lists
+    line = line.replace(/^(\*|-)\s+(.*)/, '• $2');
+    line = line.replace(/^(\d+)\.\s+(.*)/, '$1. $2');
+
+    // Quote
+    line = line.replace(/^>\s*/, '> ');
+
+    return line;
+  }).join('\n');
+
+  let result = processed;
+
+  // ==============================
+  // INLINE FORMATTING
+  // ==============================
+
+  // Bold
+  result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
+  result = result.replace(/__(.+?)__/g, '*$1*');
+
+  // Italic (SAFE)
+  result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '_$1_');
+
+  // Strike
+  result = result.replace(/~~(.+?)~~/g, '~$1~');
+
+  // Code
+  result = result.replace(/```([\s\S]*?)```/g, '```$1```');
+  result = result.replace(/`(.+?)`/g, '`$1`');
+
+  // Links
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+
+  // Cleanup
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  // Fallback table
+  result = fallbackTable(result);
+
+  return result.trim();
+}
 
 
-        // [2] 🔹 PREPROCESSING KHUSUS TABEL (SEBELUM INLINE!)
-  // Hapus <br>, normalisasi spasi pipe, dll
-  text = text
-    .replace(/<br\s*\/?>/gi, '\n  ')  // <br> → newline + indent
-    .replace(/\s*\|\s*/g, '|');        // Rapikan spasi sekitar |
+// ==============================
+// UI
+// ==============================
+function convert() {
+  outputEl.value = convertToWhatsApp(inputEl.value);
+}
+
+function clearAll() {
+  inputEl.value = '';
+  outputEl.value = '';
+}
+
+async function copy() {
+  if (!outputEl.value) return;
+  await navigator.clipboard.writeText(outputEl.value);
+  alert('Copied!');
+}
 
 
-      
-        text = convertTableToWhatsAppRobust(text); 
-
-      // 1. Proses elemen blok baris demi baris
-      const lines = text.split('\n');
-      const blockProcessed = lines.map(line => {
-        line = line.replace(/^#{1,6}\s+(.*)/, '*$1*'); // Heading -> Bold
-        line = line.replace(/^>\s*/, '> ');             // Quote
-        line = line.replace(/^(\*|-)\s+(.*)/, '$1 $2'); // Unordered list (pastikan 1 spasi)
-        line = line.replace(/^(\d+)\.\s+(.*)/, '$1. $2');// Ordered list
-        return line;
-      }).join('\n');
-
-      let result = blockProcessed;
-
-      // 2. Lindungi bold yang sudah ada agar tidak tertimpa konversi italic
-      result = result.replace(/\*\*(.+?)\*\*/g, '%%B%%$1%%');
-      result = result.replace(/__(.+?)__/g, '%%B%%$1%%');
-
-      // 3. Konversi Markdown italic ke WhatsApp italic
-      result = result.replace(/\*(.+?)\*/g, '_$1_');
-      result = result.replace(/_(.+?)_/g, '_$1_');
-
-      // 4. Konversi strikethrough
-      result = result.replace(/~~(.+?)~~/g, '~$1~');
-
-      // 5. Konversi kode & link
-      result = result.replace(/```([\s\S]*?)```/g, '```$1```'); // Block code
-      result = result.replace(/`(.+?)`/g, '`$1`');              // Inline code
-      result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)'); // Markdown link -> text (url)
-
-      // 6. Kembalikan placeholder bold ke format WhatsApp
-      result = result.replace(/%%B%%(.+?)%%/g, '*$1*');
-
-      // 7. Bersihkan baris kosong berlebihan & trim
-      result = result.replace(/\n{3,}/g, '\n\n');
-
-
-
-// Di dalam convertToWhatsApp():
-//result = fallbackTableConversion(result);
-return result.trim();
-
-
-
-
-      
-    }
-
-    convertBtn.addEventListener('click', () => {
-      outputEl.value = convertToWhatsApp(inputEl.value);
-      showToast('✅ Konversi selesai!');
-    });
-
-    // Auto-convert saat paste
-    inputEl.addEventListener('paste', () => {
-      setTimeout(() => {
-        outputEl.value = convertToWhatsApp(inputEl.value);
-        showToast('📝 Auto-converted dari paste!');
-      }, 50);
-    });
-
-    clearBtn.addEventListener('click', () => {
-      inputEl.value = '';
-      outputEl.value = '';
-      showToast('🗑️ Dikosongkan');
-    });
-
-    copyBtn.addEventListener('click', async () => {
-      if (!outputEl.value) return;
-      try {
-        await navigator.clipboard.writeText(outputEl.value);
-        showToast('📋 Tersalin ke clipboard!');
-      } catch {
-        showToast('❌ Gagal menyalin. Silakan seleksi manual.');
-      }
-    });
-  </script>
+// Auto convert on paste
+inputEl.addEventListener('paste', () => {
+  setTimeout(() => {
+    outputEl.value = convertToWhatsApp(inputEl.value);
+  }, 50);
+});
+</script>
 </body>
 </html>
