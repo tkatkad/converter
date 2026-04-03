@@ -158,6 +158,18 @@ function convertTableToWhatsAppRobust(markdown) {
   });
 }
 
+
+    
+ 
+function fallbackTableConversion(text) {
+  // Jika masih ada pola tabel markdown yang lolos, konversi ke list
+  return text.replace(/^\|(.+)\|\s*$/gm, (match, content) => {
+    const cells = content.split('|').map(c => c.trim()).filter(Boolean);
+    if (cells.length <= 1) return match; // Bukan tabel
+    return '• ' + cells.join(' → ');
+  });
+}
+
     
     function showToast(msg) {
       toast.textContent = msg;
@@ -213,7 +225,17 @@ function convertTableToWhatsAppRobust(markdown) {
 
       // 7. Bersihkan baris kosong berlebihan & trim
       result = result.replace(/\n{3,}/g, '\n\n');
-      return result.trim();
+
+
+
+// Di dalam convertToWhatsApp():
+result = fallbackTableConversion(result);
+return result.trim();
+
+
+
+
+      
     }
 
     convertBtn.addEventListener('click', () => {
