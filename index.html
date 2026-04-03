@@ -103,7 +103,56 @@
 }
 
 
-
+function convertTableToWhatsAppRobust(markdown) {
+  // Regex untuk deteksi markdown table: minimal 2 baris dengan |
+  const tableRegex = /^(\|[^\n]+\|\n)(\|[\s:\-]+\|\n)((?:\|[^\n]+\|\n?)+)/gm;
+  
+  return markdown.replace(tableRegex, (fullMatch, headerRow, separatorRow, bodyRows) => {
+    // Parse semua baris
+    const rawRows = [headerRow, ...bodyRows.trim().split('\n')]
+      .map(row => row.trim())
+      .filter(row => row.startsWith('|') && row.endsWith('|'));
+    
+    if (rawRows.length < 2) return fullMatch; // Bukan tabel valid
+    
+    // Extract sel, abaikan separator row (baris dengan :---)
+    const data = rawRows
+      .filter(row => !row.match(/^\|[ :\-\|]+\|$/))
+      .map(row => 
+        row.split('|')
+          .map(cell => cell.trim())
+          .filter((_, i, arr) => i > 0 && i < arr.length) // Hapus | awal/akhir kosong
+      );
+    
+    if (data.length === 0) return fullMatch;
+    
+    const [headers, ...body] = data;
+    
+    // Hitung lebar maksimal per kolom untuk alignment
+    const colWidths = headers.map((_, colIndex) => {
+      const cells = [headers[colIndex], ...body.map(row => row[colIndex] || '')];
+      return Math.max(...cells.map(c => c.length), 5); // Minimal 5 char
+    });
+    
+    // Build output monospace
+    let output = '```\n';
+    
+    // Header
+    output += headers.map((h, i) => h.padEnd(colWidths[i])).join(' │ ') + '\n';
+    output += colWidths.map(w => '─'.repeat(w)).join('┼') + '\n';
+    
+    // Body
+    body.forEach(row => {
+      const padded = row.map((cell, i) => 
+        (cell || '').padEnd(colWidths[i])
+      );
+      output += padded.join(' │ ') + '\n';
+    });
+    
+    output += '```';
+    return output;
+  });
+}
 
     
     function showToast(msg) {
@@ -116,7 +165,7 @@
       if (!md.trim()) return '';
       let text = md.replace(/\r\n/g, '\n');
 
-        text = convertTableToWhatsApp(text); 
+        text = convertTableToWhatsAppRobust(text); 
 
       // 1. Proses elemen blok baris demi baris
       const lines = text.split('\n');
