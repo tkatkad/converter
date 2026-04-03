@@ -3,299 +3,284 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Markdown → WhatsApp Formatter 📋</title>
+<title>Markdown → WhatsApp Formatter</title>
 <style>
 :root {
   --bg: #f0f2f5; --card: #ffffff; --primary: #25d366;
   --primary-hover: #128c7e; --text: #111b21; --subtext: #54656f;
   --border: #d1d7db; --output-bg: #e7efe7;
 }
-* { box-sizing: border-box; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
-       background: var(--bg); padding: 20px; margin: 0; color: var(--text); }
-.container { max-width: 900px; margin: auto; background: var(--card); 
-             padding: 24px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
-h2 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 8px; }
-textarea { width: 100%; min-height: 150px; margin: 12px 0; padding: 12px; 
-           border: 1px solid var(--border); border-radius: 8px; font-size: 14px;
-           font-family: monospace; resize: vertical; }
+body { font-family: sans-serif; background: var(--bg); padding: 20px; margin: 0; }
+.container { max-width: 800px; margin: auto; background: var(--card); 
+             padding: 20px; border-radius: 10px; }
+textarea { width: 100%; min-height: 120px; margin: 10px 0; padding: 10px; 
+           border: 1px solid var(--border); border-radius: 6px; font-family: monospace; }
 textarea:focus { outline: none; border-color: var(--primary); }
 #output { background: var(--output-bg); min-height: 200px; white-space: pre-wrap; }
-.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-button { padding: 10px 16px; background: var(--primary); color: white; border: none; 
-         border-radius: 8px; cursor: pointer; font-weight: 500; transition: background 0.2s;
-         display: flex; align-items: center; gap: 6px; }
+button { padding: 10px 16px; margin-right: 5px; cursor: pointer; 
+         background: var(--primary); color: white; border: none; 
+         border-radius: 6px; font-weight: 500; }
 button:hover { background: var(--primary-hover); }
 button.secondary { background: #6c757d; }
 button.secondary:hover { background: #5a6268; }
-.status { font-size: 13px; color: var(--subtext); margin-top: 8px; min-height: 20px; }
-.status.success { color: var(--primary); }
-.hint { font-size: 12px; color: var(--subtext); margin: 8px 0; padding: 10px; 
-        background: #f8f9fa; border-radius: 6px; }
-.hint code { background: #e9ecef; padding: 2px 6px; border-radius: 4px; }
+.hint { font-size: 12px; color: var(--subtext); margin: 8px 0; }
 </style>
 </head>
 <body>
 <div class="container">
   <h2>📱 Markdown → WhatsApp Formatter</h2>
+  <div class="hint">💡 Tabel otomatis jadi bullet list vertikal • Kolom 1 = judul, Kolom 2+ = sub-list</div>
   
-  <div class="hint">
-    💡 <strong>Fitur baru:</strong> Tabel otomatis diubah jadi bullet list vertikal 
-    agar lebih rapi di WhatsApp! 📋
-  </div>
-
   <textarea id="input" placeholder="Paste Markdown di sini..."></textarea>
-
-  <div class="btn-group">
-    <button onclick="convert()">🔄 Convert</button>
-    <button class="secondary" onclick="clearAll()">🗑️ Clear</button>
-    <button class="secondary" onclick="copy()">📋 Copy Result</button>
-  </div>
   
-  <div class="status" id="status"></div>
-  <textarea id="output" readonly placeholder="Hasil konversi akan muncul di sini..."></textarea>
+  <button onclick="convert()">🔄 Convert</button>
+  <button class="secondary" onclick="clearAll()">🗑️ Clear</button>
+  <button class="secondary" onclick="copy()">📋 Copy</button>
+  
+  <textarea id="output" readonly placeholder="Hasil konversi..."></textarea>
 </div>
 
 <script>
 const inputEl = document.getElementById('input');
 const outputEl = document.getElementById('output');
-const statusEl = document.getElementById('status');
 
 // ==============================
-// MAIN CONVERTER - BULLET LIST MODE
+// TABLE PARSER - LOGIKA ANDA (ROW-BASED BULLET)
+// ==============================
+function convertTable(md) {
+  const tableRegex = /(\|.*\|\n)+/g;
+
+  return md.replace(tableRegex, (table) => {
+    let rows = table.trim().split('\n');
+    
+    // Hapus separator row: |---|---|
+    rows = rows.filter(r => !r.match(/^\|\s*[:\- ]+\|/));
+    
+    // Parse cells, handle <br> → newline
+    let data = rows.map(r =>
+      r.split('|').slice(1, -1).map(c =>
+        c.replace(/<br\s*\/?>/gi, '\n').trim()
+      )
+    );
+    
+    if (data.length < 2) return table;
+    
+    const headers = data[0];
+    const body = data.slice(1);
+    
+    let out = '';
+    
+    body.forEach(row => {
+      // Kolom 1 = judul utama
+      const title = row[0]?.trim();
+      if (!title) return;
+      out += `\n• ${title}\n`;
+      
+      // Kolom 2..n = sub-bullet dengan header
+      for (let i = 1; i < headers.length; i++) {
+        const colTitle = headers[i]?.trim();
+        const cell = row[i]?.trim();
+        
+        if (!colTitle || !cell) continue;
+        
+        out += `  - ${colTitle}:\n`;
+        
+        // Split multi-line content, re-number each item
+        const lines = cell.split('\n').filter(l => l.trim());
+        lines.forEach((line, idx) => {
+          // Hapus prefix numbering lama (1. 2. dll), biar tidak dobel
+          const clean = line.replace(/^\s*\d+[\.\)]\s*/, '').trim();
+          out += `    ${idx + 1}. ${clean}\n`;
+        });
+      }
+    });
+    
+    return out.trim();
+  });
+}
+
+// ==============================
+// PSEUDO-TABLE HANDLER (• X → Y → Z format)
+// ==============================
+function convertPseudoTable(md) {
+  // Match: • Header → Col1 → Col2 → ... (minimal 3 kolom)
+  const pseudoRegex = /^•\s*([^→\n]+?)\s*→\s*([^→\n]+?)\s*→\s*(.+?)(?=\n•|\n\n|\n$|$)/gms;
+  
+  return md.replace(pseudoRegex, (match, titleRaw, col1Raw, restRaw) => {
+    const clean = (str) => str.trim()
+      .replace(/<[^>]+>/g, '')
+      .replace(/^_+|_+$/g, '')
+      .trim();
+    
+    const title = clean(titleRaw);
+    const col1Header = clean(col1Raw);
+    
+    // Parse remaining columns: "Col2 → Col3 → ..."
+    const remaining = restRaw.split('→').map(s => clean(s));
+    
+    let out = `\n• ${title}\n`;
+    
+    // Helper: parse cell content (handle numbered items or comma-separated)
+    const parseCell = (str) => {
+      str = str.replace(/<[^>]+>/g, '').trim();
+      // Jika ada pattern "1. xxx 2. yyy", split by number
+      if (/\d+[\.\)]\s/.test(str)) {
+        return str.split(/\s*(?=\d+[\.\)]\s*)/).filter(s => s.trim());
+      }
+      // Else split by comma or newline
+      return str.split(/[\n,]/).filter(s => s.trim());
+    };
+    
+    // Column 1
+    const items1 = parseCell(remaining[0] || '');
+    if (items1.length) {
+      out += `  - ${col1Header}:\n`;
+      items1.forEach((item, idx) => {
+        const cleanItem = item.replace(/^\s*\d+[\.\)]\s*/, '').trim();
+        out += `    ${idx + 1}. ${cleanItem}\n`;
+      });
+    }
+    
+    // Column 2+ (jika ada)
+    for (let i = 1; i < remaining.length; i++) {
+      const header = headers?.[i + 1] || `Kolom ${i + 2}`;
+      const items = parseCell(remaining[i] || '');
+      if (items.length) {
+        out += `  - ${header}:\n`;
+        items.forEach((item, idx) => {
+          const cleanItem = item.replace(/^\s*\d+[\.\)]\s*/, '').trim();
+          out += `    ${idx + 1}. ${cleanItem}\n`;
+        });
+      }
+    }
+    
+    return out.trim();
+  });
+}
+
+// ==============================
+// PROTECT CODE BLOCKS
+// ==============================
+function protectCodeBlocks(text) {
+  const blocks = [];
+  text = text.replace(/```[\s\S]*?```/g, match => {
+    const id = blocks.length;
+    blocks.push(match);
+    return `@@CODEBLOCK_${id}@@`;
+  });
+  return { text, blocks };
+}
+
+function restoreCodeBlocks(text, blocks) {
+  return text.replace(/@@CODEBLOCK_(\d+)@@/g, (_, i) => blocks[i]);
+}
+
+// ==============================
+// INLINE FORMAT (FOLLOW YOUR LOGIC)
+// ==============================
+function formatInline(text) {
+  const { text: safeText, blocks } = protectCodeBlocks(text);
+  let result = safeText;
+  
+  // BOLD: **text** or __text__ → *text*
+  result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
+  result = result.replace(/__(.+?)__/g, '*$1*');
+  
+  // STRIKE: ~~text~~ → ~text~
+  result = result.replace(/~~(.+?)~~/g, '~$1~');
+  
+  // LINK: [text](url) → text (url)
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  
+  // Italic: ONLY convert *text* → _text_ if standalone (not inside word)
+  // Tapi sesuai kode Anda: italic markdown dihapus saja, biar plain
+  result = result.replace(/(^|[^*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, '$1_$2_');
+  
+  // Cleanup stray underscores that aren't meant for italic
+  result = result.replace(/(^|[\s])_([^_\n]+?)_(?=[\s.,]|$)/g, '$1$2');
+  
+  // Fix bullet/heading glitch
+  result = result.replace(/^_?([•▶📌])/gm, '$1');
+  
+  return restoreCodeBlocks(result, blocks);
+}
+
+// ==============================
+// MAIN CONVERTER
 // ==============================
 function convertToWhatsApp(md) {
   if (!md?.trim()) return '';
   
   let text = md.replace(/\r\n/g, '\n');
   
-  // 1. Handle <br> tags → line break
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  
-  // 2. Handle HTML entities
-  text = text.replace(/&nbsp;/g, ' ')
-             .replace(/&amp;/g, '&')
-             .replace(/&lt;/g, '<')
-             .replace(/&gt;/g, '>');
-  
-  // 3. Clean stray formatting: "_• _" → "• "
+  // 1. Clean stray formatting artifacts: "_• _" → "• "
   text = text.replace(/_\s*•\s*_/g, '• ')
              .replace(/^•\s*_+\s*/gm, '• ')
              .replace(/\s*_+\s*(?=\n|$)/gm, '');
   
-  // 4. Convert pseudo-table: • A → B → C → bullet list vertikal
-  text = convertPseudoTableToBullets(text);
+  // 2. Handle pseudo-table FIRST (• X → Y → Z)
+  text = convertPseudoTable(text);
   
-  // 5. Convert standard markdown table | A | B | C | → bullet list vertikal
-  text = convertStandardTableToBullets(text);
+  // 3. Handle standard markdown table | X | Y |
+  text = convertTable(text);
   
-  // 6. Process line-by-line: headings, lists, quotes
+  // 4. Line-by-line processing: headings, lists, quotes
   const lines = text.split('\n');
   const processed = lines.map(line => {
     let l = line;
-    // Headings
-    l = l.replace(/^#\s+(.*)/, '*📌 $1*');
-    l = l.replace(/^##\s+(.*)/, '*▶ $1*');
-    l = l.replace(/^###\s+(.*)/, '*• $1*');
-    // Lists
+    // Headings: # → 📌, ## → ▶, ### → •
+    l = l.replace(/^#\s+(.*)/, '📌 $1');
+    l = l.replace(/^##\s+(.*)/, '▶ $1');
+    l = l.replace(/^###\s+(.*)/, '• $1');
+    // Lists: - or * → •
     if (!l.trim().startsWith('```')) {
       l = l.replace(/^(\*|-)\s+/, '• ');
     }
+    // Numbered lists: keep as-is but ensure spacing
+    l = l.replace(/^(\d+)\.\s+(.*)/, '$1. $2');
     // Blockquotes
-    l = l.replace(/^>\s*/, '▌ ');
+    l = l.replace(/^>\s*/, '> ');
     return l;
   }).join('\n');
   
-  let result = processed;
+  // 5. Inline formatting
+  let result = formatInline(processed);
   
-  // ==============================
-  // INLINE FORMATTING
-  // ==============================
-  // Bold
-  result = result.replace(/\*\*([^*\n]+?)\*\*/g, '*$1*');
-  result = result.replace(/__([^_\n]+?)__/g, '*$1*');
-  // Italic → WhatsApp uses _italic_
-  result = result.replace(/(?<!\w|\*)\*([^*\n]+?)\*(?!\w|\*)/g, '_$1_');
-  result = result.replace(/(?<!\w|_)_([^_\n]+?)_(?!\w|_)/g, '_$1_');
-  result = result.replace(/_{3,}/g, '_');
-  // Strikethrough
-  result = result.replace(/~~([^~\n]+?)~~/g, '~$1~');
-  // Inline code
-  result = result.replace(/`([^`\n]+?)`/g, '`$1`');
-  // Code blocks
-  result = result.replace(/```([\s\S]*?)```/g, (m, code) => '```\n' + code.trim() + '\n```');
-  // Links
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
-  
-  // Cleanup
-  result = result.replace(/\n{4,}/g, '\n\n\n');
-  result = result.replace(/^\s+|\s+$/g, '');
+  // 6. Cleanup extra newlines
+  result = result.replace(/\n{3,}/g, '\n\n');
   
   return result.trim();
-}
-
-// ==============================
-// PSEUDO-TABLE → BULLET LIST
-// Format: • Kelurahan → Rayon 1 → Rayon 2
-// ==============================
-function convertPseudoTableToBullets(text) {
-  // Match pattern: • Header → Col1 → Col2 → ...
-  const pseudoTableRegex = /^•\s*([^→\n]+?)\s*→\s*([^→\n]+?)\s*→\s*(.+?)(?=\n•|\n$|$)/gms;
-  
-  return text.replace(pseudoTableRegex, (match, header, col1Raw, col2Raw) => {
-    const clean = (str) => str.trim()
-      .replace(/<[^>]+>/g, '')
-      .replace(/\n+/g, ', ')
-      .replace(/\s+/g, ' ')
-      .replace(/^_+|_+$/g, '')
-      .trim();
-    
-    const h = clean(header);
-    const c1 = clean(col1Raw);
-    const c2 = clean(col2Raw);
-    
-    // Format output: row-based bullet with nested lists
-    let output = `📍 *${h}*\n`;
-    
-    // Parse Rayon 1 items (split by number pattern or comma)
-    const parseItems = (str) => {
-      // If contains numbered items like "1. X 2. Y", split by number
-      if (/\d+\.\s/.test(str)) {
-        return str.split(/\s*(?=\d+\.)/).filter(s => s.trim());
-      }
-      // Else split by comma
-      return str.split(',').filter(s => s.trim());
-    };
-    
-    const items1 = parseItems(c1);
-    const items2 = parseItems(c2);
-    
-    output += `   ├─ *Rayon 1:*\n`;
-    items1.forEach(item => {
-      output += `   • ${item.trim()}\n`;
-    });
-    output += `   └─ *Rayon 2:*\n`;
-    items2.forEach(item => {
-      output += `   • ${item.trim()}\n`;
-    });
-    
-    return output.trim();
-  });
-}
-
-// ==============================
-// STANDARD TABLE → BULLET LIST (COLUMN-BASED)
-// Format: | Header1 | Header2 | → each column as separate list
-// ==============================
-function convertStandardTableToBullets(md) {
-  return md.replace(/^(\|[^\n]+\|\n)(\|[\s:\-|]+\|\n)((?:\|[^\n]+\|\n?)+)/gm, (match) => {
-    const rows = match.trim().split('\n')
-      .filter(r => r.trim().startsWith('|') && r.trim().endsWith('|'))
-      .filter(r => !r.match(/^\|[\s:\-|]+\|$/));
-    
-    if (rows.length < 1) return match;
-    
-    // Parse cells
-    const data = rows.map(r => 
-      r.split('|').slice(1, -1).map(c => c.trim().replace(/<[^>]+>/g, ''))
-    );
-    
-    const colCount = Math.max(...data.map(r => r.length));
-    const normalized = data.map(row => {
-      const r = [...row];
-      while (r.length < colCount) r.push('');
-      return r.slice(0, colCount);
-    });
-    
-    // Extract headers (first row)
-    const headers = normalized[0].map(h => h || 'Kolom');
-    
-    // Build output: each column as separate bullet list
-    let output = '';
-    for (let colIdx = 0; colIdx < colCount; colIdx++) {
-      const colHeader = headers[colIdx] || `Kolom ${colIdx + 1}`;
-      output += `📋 *${colHeader}*\n`;
-      
-      // Skip header row for content, start from index 1
-      for (let rowIdx = 1; rowIdx < normalized.length; rowIdx++) {
-        const cell = normalized[rowIdx][colIdx]?.trim();
-        if (cell) {
-          // If cell contains multiple items (numbered or comma), expand
-          const items = cell.split(/[\n,]/).filter(s => s.trim());
-          if (items.length > 1) {
-            items.forEach(item => {
-              output += `• ${item.trim()}\n`;
-            });
-          } else {
-            output += `• ${cell}\n`;
-          }
-        }
-      }
-      output += '\n';
-    }
-    
-    return output.trim();
-  });
 }
 
 // ==============================
 // UI FUNCTIONS
 // ==============================
 function convert() {
-  try {
-    const result = convertToWhatsApp(inputEl.value);
-    outputEl.value = result;
-    showStatus('✅ Konversi berhasil!', 'success');
-  } catch (e) {
-    showStatus('❌ Error: ' + e.message, 'error');
-    console.error(e);
-  }
+  outputEl.value = convertToWhatsApp(inputEl.value);
 }
 
 function clearAll() {
   inputEl.value = '';
   outputEl.value = '';
-  showStatus('');
   inputEl.focus();
 }
 
 async function copy() {
-  if (!outputEl.value.trim()) {
-    showStatus('⚠️ Tidak ada hasil untuk disalin', 'error');
-    return;
-  }
+  if (!outputEl.value.trim()) return;
   try {
     await navigator.clipboard.writeText(outputEl.value);
-    showStatus('📋 Hasil disalin ke clipboard!', 'success');
+    alert('✅ Copied!');
   } catch {
     outputEl.select();
     document.execCommand('copy');
-    showStatus('📋 Hasil disalin!', 'success');
+    alert('✅ Copied!');
   }
-}
-
-function showStatus(msg, type = '') {
-  statusEl.textContent = msg;
-  statusEl.className = 'status ' + type;
-  if (msg) setTimeout(() => { if (statusEl.textContent === msg) statusEl.textContent = ''; }, 3000);
 }
 
 // Auto-convert on paste
-let pasteTimeout;
 inputEl.addEventListener('paste', () => {
-  clearTimeout(pasteTimeout);
-  pasteTimeout = setTimeout(convert, 100);
+  setTimeout(convert, 50);
 });
-
-// Keyboard shortcut: Ctrl+Enter
-inputEl.addEventListener('keydown', (e) => {
-  if (e.ctrlKey && e.key === 'Enter') {
-    e.preventDefault();
-    convert();
-  }
-});
-
-showStatus('Siap! Paste Markdown & klik Convert 🚀');
 </script>
 </body>
 </html>
