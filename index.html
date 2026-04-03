@@ -35,7 +35,7 @@ const outputEl = document.getElementById('output');
 // ==============================
 // TABLE PARSER (AMAN)
 // ==============================
-function convertTable(md) {
+function convertTableRusak(md) {
   const tableRegex = /(\|.*\|\n)+/g;
 
   return md.replace(tableRegex, (table) => {
@@ -90,6 +90,57 @@ function convertTable(md) {
   });
 }
 
+
+function convertTable(md) {
+  const tableRegex = /(\|.*\|\n)+/g;
+
+  return md.replace(tableRegex, (table) => {
+
+    let rows = table.trim().split('\n');
+
+    // hapus separator
+    rows = rows.filter(r => !r.match(/^\|\s*[:\- ]+\|/));
+
+    // parse
+    let data = rows.map(r =>
+      r.split('|').slice(1, -1).map(c =>
+        c.replace(/<br\s*\/?>/gi, '\n').trim()
+      )
+    );
+
+    if (data.length < 2) return table;
+
+    const headers = data[0];
+    const body = data.slice(1);
+
+    let out = '';
+
+    body.forEach(row => {
+
+      const title = row[0];
+      out += `\n• ${title}\n`;
+
+      for (let i = 1; i < headers.length; i++) {
+        const colTitle = headers[i];
+        const cell = row[i] || '';
+
+        if (!cell.trim()) continue;
+
+        out += `  - ${colTitle}:\n`;
+
+        const lines = cell.split('\n');
+
+        lines.forEach((line, idx) => {
+  let clean = line.replace(/^\d+\.\s*/, '');
+  out += `    ${idx + 1}. ${clean}\n`;
+});
+      }
+    });
+
+    return out.trim();
+  });
+}
+  
 
 // ==============================
 // PROTECT CODE BLOCK
