@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Markdown → WhatsApp Formatter</title>
+<title>Markdown → WhatsApp Formatter (Final Fix)</title>
 
 <style>
 body { font-family:sans-serif; background:#f0f2f5; padding:20px; }
@@ -18,7 +18,7 @@ button { padding:10px; margin-right:5px; cursor:pointer; }
 <div class="container">
 <h2>📱 Markdown → WhatsApp Formatter</h2>
 
-<textarea id="input" placeholder="Paste Markdown dari AI / Notion di sini..."></textarea>
+<textarea id="input" placeholder="Paste Markdown di sini..."></textarea>
 
 <button onclick="convert()">🔄 Convert</button>
 <button onclick="clearAll()">🗑️ Clear</button>
@@ -33,7 +33,7 @@ const outputEl = document.getElementById('output');
 
 
 // ==============================
-// TABLE PARSER (LEAN & AKURAT)
+// TABLE PARSER (AMAN)
 // ==============================
 function convertTable(md) {
   const tableRegex = /(\|.*\|\n)+/g;
@@ -42,10 +42,8 @@ function convertTable(md) {
 
     let rows = table.trim().split('\n');
 
-    // hapus separator
     rows = rows.filter(r => !r.match(/^\|\s*[:\- ]+\|/));
 
-    // parse cell
     let data = rows.map(r =>
       r.split('|').slice(1, -1).map(c =>
         c.replace(/<br\s*\/?>/gi, '\n').trim()
@@ -56,12 +54,10 @@ function convertTable(md) {
 
     const colCount = Math.max(...data.map(r => r.length));
 
-    // normalisasi kolom
     data.forEach(r => {
       while (r.length < colCount) r.push('');
     });
 
-    // hitung lebar kolom (multiline aware)
     const colWidths = Array(colCount).fill(0);
     data.forEach(row => {
       row.forEach((cell, i) => {
@@ -96,64 +92,83 @@ function convertTable(md) {
 
 
 // ==============================
-// MAIN CONVERTER
+// PROTECT CODE BLOCK
+// ==============================
+function protectCodeBlocks(text) {
+  const blocks = [];
+  text = text.replace(/```[\s\S]*?```/g, match => {
+    blocks.push(match);
+    return `__CODEBLOCK_${blocks.length}__`;
+  });
+  return { text, blocks };
+}
+
+function restoreCodeBlocks(text, blocks) {
+  return text.replace(/__CODEBLOCK_(\d+)__/g, (_, i) => blocks[i - 1]);
+}
+
+
+// ==============================
+// INLINE FORMAT (FIX TOTAL)
+// ==============================
+function formatInline(text) {
+
+  const { text: safeText, blocks } = protectCodeBlocks(text);
+
+  let result = safeText;
+
+  // BOLD
+  result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
+  result = result.replace(/__(.+?)__/g, '*$1*');
+
+  // STRIKE
+  result = result.replace(/~~(.+?)~~/g, '~$1~');
+
+  // HAPUS italic markdown (_text_) → biar tidak bocor
+  result = result.replace(/(^|[\s\(\[])_([^_\n]+?)_(?=[\s\)\].,!?:;]|$)/g, '$1$2');
+
+  // OPTIONAL: convert *italic* → _italic_ (lebih WA native)
+  result = result.replace(/(^|[^*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, '$1_$2_');
+
+  // FIX bullet / heading glitch
+  result = result.replace(/^_?([•▶📌])/gm, '$1');
+
+  // LINK
+  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+
+  return restoreCodeBlocks(result, blocks);
+}
+
+
+// ==============================
+// MAIN
 // ==============================
 function convertToWhatsApp(md) {
   if (!md.trim()) return '';
 
-  let text = md
-    .replace(/\r\n/g, '\n');
+  let text = md.replace(/\r\n/g, '\n');
 
-  // Convert table dulu
+  // table dulu
   text = convertTable(text);
 
   const lines = text.split('\n');
 
   const processed = lines.map(line => {
 
-    // Heading
-    line = line.replace(/^###\s+(.*)/, '*• $1*');
-    line = line.replace(/^##\s+(.*)/, '*▶ $1*');
-    line = line.replace(/^#\s+(.*)/, '*📌 $1*');
+    line = line.replace(/^###\s+(.*)/, '• $1');
+    line = line.replace(/^##\s+(.*)/, '▶ $1');
+    line = line.replace(/^#\s+(.*)/, '📌 $1');
 
-    // List
     line = line.replace(/^(\*|-)\s+(.*)/, '• $2');
     line = line.replace(/^(\d+)\.\s+(.*)/, '$1. $2');
 
-    // Quote
     line = line.replace(/^>\s*/, '> ');
 
     return line;
   }).join('\n');
 
-  let result = processed;
+  let result = formatInline(processed);
 
-  // ==============================
-  // INLINE FORMATTING (SAFE)
-  // ==============================
-
-  // Code
-  result = result.replace(/```([\s\S]*?)```/g, '```$1```');
-  result = result.replace(/`(.+?)`/g, '`$1`');
-
-  // Bold
-  result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
-  result = result.replace(/__(.+?)__/g, '*$1*');
-
-  // Fix italic vs bold conflict
-  result = result.replace(/_(\*.+?\*)_/g, '$1');
-
-  // Italic
-  result = result.replace(/(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)/g, '_$1_');
-  result = result.replace(/_(.+?)_/g, '_$1_');
-
-  // Strike
-  result = result.replace(/~~(.+?)~~/g, '~$1~');
-
-  // Link
-  result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
-
-  // Cleanup
   result = result.replace(/\n{3,}/g, '\n\n');
 
   return result.trim();
@@ -178,7 +193,6 @@ async function copy() {
   alert('Copied!');
 }
 
-// Auto convert saat paste
 inputEl.addEventListener('paste', () => {
   setTimeout(() => {
     outputEl.value = convertToWhatsApp(inputEl.value);
