@@ -3,14 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Markdown → WhatsApp Formatter</title>
+<title>Markdown → WhatsApp Formatter PRO</title>
 
 <style>
-:root {
-  --bg:#f0f2f5; --card:#fff; --primary:#25d366;
-}
-body { font-family:sans-serif; background:var(--bg); padding:20px; }
-.container { max-width:800px; margin:auto; background:var(--card); padding:20px; border-radius:10px; }
+body { font-family:sans-serif; background:#f0f2f5; padding:20px; }
+.container { max-width:800px; margin:auto; background:#fff; padding:20px; border-radius:10px; }
 textarea { width:100%; min-height:120px; margin-bottom:10px; padding:10px; }
 button { padding:10px; margin-right:5px; cursor:pointer; }
 #output { background:#e7efe7; }
@@ -19,9 +16,9 @@ button { padding:10px; margin-right:5px; cursor:pointer; }
 
 <body>
 <div class="container">
-<h2>📱 Markdown → WhatsApp Formatter</h2>
+<h2>📱 Markdown → WhatsApp Formatter (PRO)</h2>
 
-<textarea id="input" placeholder="Paste Markdown..."></textarea>
+<textarea id="input" placeholder="Paste Markdown / hasil AI di sini..."></textarea>
 
 <button onclick="convert()">🔄 Convert</button>
 <button onclick="clearAll()">🗑️ Clear</button>
@@ -36,42 +33,88 @@ const outputEl = document.getElementById('output');
 
 
 // ==============================
-// TABLE PARSER (ROBUST)
+// 🔥 TABLE ENGINE (AI-PROOF)
 // ==============================
 function convertTable(md) {
-  const lines = md.split('\n');
-  let result = [];
-  let buffer = [];
+  const tableRegex = /(\|.*\|\n?)+/g;
 
-  function flushTable() {
-    if (buffer.length < 2) {
-      result.push(...buffer);
-      buffer = [];
-      return;
+  return md.replace(tableRegex, (block) => {
+
+    // STEP 1: Normalisasi
+    let raw = block
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/\r/g, '');
+
+    let lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+    // STEP 2: Merge broken rows
+    let merged = [];
+    let current = '';
+
+    for (let line of lines) {
+      if (line.startsWith('|')) {
+        if (current) merged.push(current);
+        current = line;
+      } else {
+        current += ' ' + line;
+      }
     }
+    if (current) merged.push(current);
 
-    const rows = buffer.map(r =>
-      r.split('|').slice(1, -1).map(c => c.trim())
+    // STEP 3: Remove separator
+    merged = merged.filter(r => !r.match(/^\|[\s:\-\|]+\|$/));
+
+    // STEP 4: Parse cells
+    let data = merged.map(r =>
+      r.split('|').slice(1, -1).map(cell =>
+        cell
+          .replace(/\n/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      )
     );
 
-    const colCount = Math.max(...rows.map(r => r.length));
+    if (data.length < 2) return block;
 
-    rows.forEach(r => {
+    // STEP 5: Normalize column count
+    const colCount = Math.max(...data.map(r => r.length));
+    data.forEach(r => {
       while (r.length < colCount) r.push('');
     });
 
+    // STEP 6: Handle LIST inside cell
+    data = data.map(row => row.map(cell => {
+      return cell
+        .replace(/\d+\.\s*/g, '\n$&')
+        .replace(/-\s+/g, '\n• ')
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+    }));
+
+    // STEP 7: Column width
     const colWidths = Array(colCount).fill(0);
-    rows.forEach(r => {
+    data.forEach(r => {
       r.forEach((c,i)=>{
-        colWidths[i] = Math.max(colWidths[i], c.length, 5);
+        const maxLine = Math.max(...c.split('\n').map(x=>x.length));
+        colWidths[i] = Math.max(colWidths[i], maxLine, 5);
       });
     });
 
+    // STEP 8: Render table
     let out = '```\n';
 
-    rows.forEach((row, idx) => {
-      const line = row.map((c,i)=>c.padEnd(colWidths[i])).join(' │ ');
-      out += line + '\n';
+    data.forEach((row, idx) => {
+
+      // multi-line cell support
+      const splitCells = row.map(c => c.split('\n'));
+      const maxLines = Math.max(...splitCells.map(c => c.length));
+
+      for (let i = 0; i < maxLines; i++) {
+        const line = splitCells.map((cell, ci) =>
+          (cell[i] || '').padEnd(colWidths[ci])
+        ).join(' │ ');
+        out += line + '\n';
+      }
 
       if (idx === 0) {
         out += colWidths.map(w=>'─'.repeat(w)).join('┼') + '\n';
@@ -79,32 +122,7 @@ function convertTable(md) {
     });
 
     out += '```';
-    result.push(out);
-    buffer = [];
-  }
-
-  for (let line of lines) {
-    if (line.includes('|')) {
-      buffer.push(line);
-    } else {
-      flushTable();
-      result.push(line);
-    }
-  }
-
-  flushTable();
-  return result.join('\n');
-}
-
-
-// ==============================
-// FALLBACK TABLE
-// ==============================
-function fallbackTable(text) {
-  return text.replace(/^\|(.+)\|\s*$/gm, (m, content) => {
-    const cells = content.split('|').map(c => c.trim()).filter(Boolean);
-    if (cells.length <= 1) return m;
-    return '• ' + cells.join(' → ');
+    return out;
   });
 }
 
@@ -115,17 +133,11 @@ function fallbackTable(text) {
 function convertToWhatsApp(md) {
   if (!md.trim()) return '';
 
-  let text = md.replace(/\r\n/g, '\n');
+  let text = md
+    .replace(/\r\n/g, '\n')
+    .replace(/<br\s*\/?>/gi, '\n');
 
-  // Handle <br>
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-
-  // Rapikan pipe hanya untuk baris tabel
-  text = text.replace(/^\|.*\|$/gm, line =>
-    line.replace(/\s*\|\s*/g, '|')
-  );
-
-  // Convert table
+  // Table dulu
   text = convertTable(text);
 
   const lines = text.split('\n');
@@ -151,7 +163,7 @@ function convertToWhatsApp(md) {
   let result = processed;
 
   // ==============================
-  // INLINE FORMATTING (SAFE ORDER)
+  // INLINE FORMATTING (SAFE)
   // ==============================
 
   // Code first
@@ -162,10 +174,8 @@ function convertToWhatsApp(md) {
   result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
   result = result.replace(/__(.+?)__/g, '*$1*');
 
-  // Italic (tidak ganggu bold)
+  // Italic safe
   result = result.replace(/(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)/g, '_$1_');
-
-  // Underscore italic
   result = result.replace(/_(.+?)_/g, '_$1_');
 
   // Strike
@@ -174,11 +184,11 @@ function convertToWhatsApp(md) {
   // Links
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
 
-  // Cleanup
-  result = result.replace(/\n{3,}/g, '\n\n');
-
-  // Fallback table
-  result = fallbackTable(result);
+  // Cleanup kacau
+  result = result
+    .replace(/_\*\s*/g, '*')
+    .replace(/\*\*_+/g, '*')
+    .replace(/\n{3,}/g, '\n\n');
 
   return result.trim();
 }
@@ -202,7 +212,7 @@ async function copy() {
   alert('Copied!');
 }
 
-// Auto convert on paste
+// Auto convert
 inputEl.addEventListener('paste', () => {
   setTimeout(() => {
     outputEl.value = convertToWhatsApp(inputEl.value);
