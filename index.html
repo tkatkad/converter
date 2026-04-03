@@ -97,16 +97,16 @@ function convertTable(md) {
 function protectCodeBlocks(text) {
   const blocks = [];
   text = text.replace(/```[\s\S]*?```/g, match => {
+    const id = blocks.length;
     blocks.push(match);
-    return `__CODEBLOCK_${blocks.length}__`;
+    return `@@CODEBLOCK_${id}@@`; // pakai marker aman (tidak kena regex)
   });
   return { text, blocks };
 }
 
 function restoreCodeBlocks(text, blocks) {
-  return text.replace(/__CODEBLOCK_(\d+)__/g, (_, i) => blocks[i - 1]);
+  return text.replace(/@@CODEBLOCK_(\d+)@@/g, (_, i) => blocks[i]);
 }
-
 
 // ==============================
 // INLINE FORMAT (FIX TOTAL)
@@ -125,8 +125,8 @@ function formatInline(text) {
   result = result.replace(/~~(.+?)~~/g, '~$1~');
 
   // HAPUS italic markdown (_text_) → biar tidak bocor
-  result = result.replace(/(^|[\s\(\[])_([^_\n]+?)_(?=[\s\)\].,!?:;]|$)/g, '$1$2');
-
+  // ❌ JANGAN convert italic otomatis
+// biarkan plain text saja
   // OPTIONAL: convert *italic* → _italic_ (lebih WA native)
   result = result.replace(/(^|[^*])\*(?!\*)([^*\n]+?)\*(?!\*)/g, '$1_$2_');
 
@@ -135,6 +135,8 @@ function formatInline(text) {
 
   // LINK
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
+  // hapus italic markdown sisa
+result = result.replace(/(^|[\s])_([^_\n]+?)_(?=[\s.,]|$)/g, '$1$2');
 
   return restoreCodeBlocks(result, blocks);
 }
