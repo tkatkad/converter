@@ -7,20 +7,13 @@
 
 <style>
 :root {
-  --bg: #f0f2f5;
-  --card: #ffffff;
-  --primary: #25d366;
-  --primary-hover: #128c7e;
-  --text: #111b21;
-  --subtext: #54656f;
-  --border: #d1d7db;
-  --output-bg: #e7efe7;
+  --bg:#f0f2f5; --card:#fff; --primary:#25d366;
 }
-body { font-family: sans-serif; background: var(--bg); padding:20px; }
-.container { max-width:800px;margin:auto;background:#fff;padding:20px;border-radius:10px; }
-textarea { width:100%;min-height:120px;margin-bottom:10px;padding:10px; }
+body { font-family:sans-serif; background:var(--bg); padding:20px; }
+.container { max-width:800px; margin:auto; background:var(--card); padding:20px; border-radius:10px; }
+textarea { width:100%; min-height:120px; margin-bottom:10px; padding:10px; }
 button { padding:10px; margin-right:5px; cursor:pointer; }
-#output { background: var(--output-bg); }
+#output { background:#e7efe7; }
 </style>
 </head>
 
@@ -43,38 +36,40 @@ const outputEl = document.getElementById('output');
 
 
 // ==============================
-// TABLE CONVERTER (ROBUST)
+// TABLE PARSER (ROBUST)
 // ==============================
 function convertTable(md) {
-  const tableRegex = /^(\|[^\n]+\|\n)(\|[\s:\-]+\|\n)((?:\|[^\n]+\|\n?)+)/gm;
+  const lines = md.split('\n');
+  let result = [];
+  let buffer = [];
 
-  return md.replace(tableRegex, (match) => {
-    const rows = match.trim().split('\n')
-      .filter(r => r.startsWith('|') && r.endsWith('|'))
-      .filter(r => !r.match(/^\|[\s:\-\|]+\|$/));
+  function flushTable() {
+    if (buffer.length < 2) {
+      result.push(...buffer);
+      buffer = [];
+      return;
+    }
 
-    const data = rows.map(r =>
+    const rows = buffer.map(r =>
       r.split('|').slice(1, -1).map(c => c.trim())
     );
 
-    if (data.length < 2) return match;
+    const colCount = Math.max(...rows.map(r => r.length));
 
-    // Normalize column count
-    const colCount = Math.max(...data.map(r => r.length));
-    const normalized = data.map(row => {
-      while (row.length < colCount) row.push('');
-      return row;
+    rows.forEach(r => {
+      while (r.length < colCount) r.push('');
     });
 
-    // Column widths
-    const colWidths = [];
-    for (let i = 0; i < colCount; i++) {
-      colWidths[i] = Math.max(...normalized.map(r => r[i].length), 5);
-    }
+    const colWidths = Array(colCount).fill(0);
+    rows.forEach(r => {
+      r.forEach((c,i)=>{
+        colWidths[i] = Math.max(colWidths[i], c.length, 5);
+      });
+    });
 
     let out = '```\n';
 
-    normalized.forEach((row, idx) => {
+    rows.forEach((row, idx) => {
       const line = row.map((c,i)=>c.padEnd(colWidths[i])).join(' │ ');
       out += line + '\n';
 
@@ -84,8 +79,21 @@ function convertTable(md) {
     });
 
     out += '```';
-    return out;
-  });
+    result.push(out);
+    buffer = [];
+  }
+
+  for (let line of lines) {
+    if (line.includes('|')) {
+      buffer.push(line);
+    } else {
+      flushTable();
+      result.push(line);
+    }
+  }
+
+  flushTable();
+  return result.join('\n');
 }
 
 
@@ -109,25 +117,29 @@ function convertToWhatsApp(md) {
 
   let text = md.replace(/\r\n/g, '\n');
 
-  // Safe preprocessing ONLY for table lines
+  // Handle <br>
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+
+  // Rapikan pipe hanya untuk baris tabel
   text = text.replace(/^\|.*\|$/gm, line =>
     line.replace(/\s*\|\s*/g, '|')
   );
 
-  // Convert table first
+  // Convert table
   text = convertTable(text);
 
   const lines = text.split('\n');
 
   const processed = lines.map(line => {
 
-    // Heading hierarchy
+    // Heading
     line = line.replace(/^#\s+(.*)/, '*📌 $1*');
     line = line.replace(/^##\s+(.*)/, '*▶ $1*');
     line = line.replace(/^###\s+(.*)/, '*• $1*');
 
-    // Lists
+    // List
     line = line.replace(/^(\*|-)\s+(.*)/, '• $2');
+    line = line.replace(/^•\s*•/, '•');
     line = line.replace(/^(\d+)\.\s+(.*)/, '$1. $2');
 
     // Quote
@@ -139,22 +151,25 @@ function convertToWhatsApp(md) {
   let result = processed;
 
   // ==============================
-  // INLINE FORMATTING
+  // INLINE FORMATTING (SAFE ORDER)
   // ==============================
+
+  // Code first
+  result = result.replace(/```([\s\S]*?)```/g, '```$1```');
+  result = result.replace(/`(.+?)`/g, '`$1`');
 
   // Bold
   result = result.replace(/\*\*(.+?)\*\*/g, '*$1*');
   result = result.replace(/__(.+?)__/g, '*$1*');
 
-  // Italic (SAFE)
-  result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '_$1_');
+  // Italic (tidak ganggu bold)
+  result = result.replace(/(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)/g, '_$1_');
+
+  // Underscore italic
+  result = result.replace(/_(.+?)_/g, '_$1_');
 
   // Strike
   result = result.replace(/~~(.+?)~~/g, '~$1~');
-
-  // Code
-  result = result.replace(/```([\s\S]*?)```/g, '```$1```');
-  result = result.replace(/`(.+?)`/g, '`$1`');
 
   // Links
   result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');
@@ -186,7 +201,6 @@ async function copy() {
   await navigator.clipboard.writeText(outputEl.value);
   alert('Copied!');
 }
-
 
 // Auto convert on paste
 inputEl.addEventListener('paste', () => {
