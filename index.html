@@ -64,6 +64,48 @@
     const copyBtn = document.getElementById('copyBtn');
     const toast = document.getElementById('toast');
 
+
+    function convertTableToWhatsApp(markdown) {
+  // Deteksi dan konversi markdown table: | col1 | col2 |
+  const tableRegex = /(\|[^\n]+\|\n)(\|[\s:-]+\|\n)((?:\|[^\n]+\|\n?)+)/g;
+  
+  return markdown.replace(tableRegex, (match) => {
+    const rows = match.trim().split('\n').filter(r => !r.match(/^\|[ :\-\|]+\|$/));
+    
+    // Extract headers & data
+    const data = rows.map(row => 
+      row.split('|').map(cell => cell.trim()).filter(Boolean)
+    );
+    
+    if (data.length < 2) return match; // Not a valid table
+    
+    const [headers, ...body] = data;
+    
+    // Build monospace table
+    let result = '```\n';
+    
+    // Header row
+    result += headers.join(' │ ') + '\n';
+    result += '─'.repeat(headers.join(' │ ').length) + '\n';
+    
+    // Body rows
+    body.forEach(row => {
+      // Pad cells to align with headers
+      const padded = row.map((cell, i) => 
+        cell.padEnd(headers[i]?.length || cell.length)
+      );
+      result += padded.join(' │ ') + '\n';
+    });
+    
+    result += '```';
+    return result;
+  });
+}
+
+
+
+
+    
     function showToast(msg) {
       toast.textContent = msg;
       toast.classList.add('show');
@@ -73,6 +115,8 @@
     function convertToWhatsApp(md) {
       if (!md.trim()) return '';
       let text = md.replace(/\r\n/g, '\n');
+
+        text = convertTableToWhatsApp(text); 
 
       // 1. Proses elemen blok baris demi baris
       const lines = text.split('\n');
