@@ -104,41 +104,38 @@
 
 
 function convertTableToWhatsAppRobust(markdown) {
-  // Preprocessing: normalisasi spasi sekitar pipe & hapus <br> → \n
-  let processed = markdown
-    .replace(/\s*\|\s*/g, '|')           // Hapus spasi sekitar |
-    .replace(/<br\s*\/?>/gi, '\n  ');    // <br> → newline + indent (untuk monospace)
+
+  // Regex untuk deteksi markdown table: minimal 2 baris dengan |
+  const tableRegex = /^(\|[^\n]+\|\n)(\|[\s:\-]+\|\n)((?:\|[^\n]+\|\n?)+)/gm;
   
-  // Regex tabel: lebih toleran terhadap variasi format
-  const tableRegex = /^(\|.*\|\n)(\|[\s:\-\|]*\|\n)((?:\|.*\|\n?)+)/gm;
-  
-  return processed.replace(tableRegex, (fullMatch) => {
-    const rows = fullMatch.trim().split('\n')
+  return markdown.replace(tableRegex, (fullMatch, headerRow, separatorRow, bodyRows) => {
+    // Parse semua baris
+    const rawRows = [headerRow, ...bodyRows.trim().split('\n')]
       .map(row => row.trim())
       .filter(row => row.startsWith('|') && row.endsWith('|'));
     
-    if (rows.length < 2) return fullMatch;
+    if (rawRows.length < 2) return fullMatch; // Bukan tabel valid
     
-    // Parse sel: split by |, hapus empty edge cells
-    const data = rows
-      .filter(row => !row.match(/^\|[\s:\-\|]+\|$/)) // Skip separator row
+    // Extract sel, abaikan separator row (baris dengan :---)
+    const data = rawRows
+      .filter(row => !row.match(/^\|[ :\-\|]+\|$/))
       .map(row => 
         row.split('|')
           .map(cell => cell.trim())
-          .filter((_, i, arr) => i > 0 && i < arr.length - 1)
+          .filter((_, i, arr) => i > 0 && i < arr.length) // Hapus | awal/akhir kosong
       );
     
     if (data.length === 0) return fullMatch;
     
     const [headers, ...body] = data;
     
-    // Hitung lebar kolom (minimal 10 char agar rapi)
+    // Hitung lebar maksimal per kolom untuk alignment
     const colWidths = headers.map((_, colIndex) => {
       const cells = [headers[colIndex], ...body.map(row => row[colIndex] || '')];
-      return Math.max(...cells.map(c => c.replace(/[*_~`]/g, '').length), 10);
+      return Math.max(...cells.map(c => c.length), 5); // Minimal 5 char
     });
     
-    // Build monospace output
+    // Build output monospace
     let output = '```\n';
     
     // Header
@@ -229,7 +226,7 @@ function fallbackTableConversion(text) {
 
 
 // Di dalam convertToWhatsApp():
-result = fallbackTableConversion(result);
+//result = fallbackTableConversion(result);
 return result.trim();
 
 
