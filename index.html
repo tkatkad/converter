@@ -221,8 +221,25 @@ function convertToWhatsApp(md) {
   }).join('\n');
 
   let result = formatInline(processed);
+// ==============================
+// FINAL NORMALIZER (WA FORMAT)
+// ==============================
 
+// kasus: _teks...*
+result = result.replace(/_([^_*][^*]*?)\*/g, '*_$1_*');
+
+// kasus: *teks..._
+result = result.replace(/\*([^_*][^_]*?)_/g, '*_$1_*');
+
+// cleanup double wrap (jaga kalau sudah benar)
+result = result.replace(/\*__([^_]+?)__\*/g, '*_$1_*');
+
+// rapikan spasi
+result = result.replace(/\*_\s+/g, '*_');
+result = result.replace(/\s+_\*/g, '_*');
   result = result.replace(/\n{3,}/g, '\n\n');
+
+  
 
   return result.trim();
 }
@@ -252,5 +269,7 @@ inputEl.addEventListener('paste', () => {
   }, 50);
 });
 </script>
+
+  <h3><a href="/converter/qwen.html">QWEN version</a></h3>
 </body>
 </html>
