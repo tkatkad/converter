@@ -248,6 +248,12 @@ function convertToWhatsApp(md) {
   
   // 6. Cleanup extra newlines
   result = result.replace(/\n{3,}/g, '\n\n');
+
+  // ==============================
+// FIX: _text* → *_text_* (Bold+Italic WhatsApp)
+// ==============================
+// Pattern: underscore di awal, asterisk di akhir → swap jadi *_ ... _*
+result = result.replace(/(^|[\s>])_(.+?)\*(?=[\s<.,!?;:]|$)/g, '$1*$2*_');
   
   return result.trim();
 }
